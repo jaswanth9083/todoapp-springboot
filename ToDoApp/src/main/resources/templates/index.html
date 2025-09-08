@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>To-Do List Application</title>
+
+  <!-- Bootstrap CDN for quick styling -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <style>
+    body { padding: 40px; background:#f8fafb; }
+    .badge-status { border-radius: 999px; padding: .45rem .9rem; font-weight:600; }
+    .card { border-radius: .8rem; }
+    .table td, .table th { vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="display-6 text-center mb-4">To-Do List Application</h1>
+
+    <div class="card mb-4 p-3">
+      <form id="taskForm" class="row g-2 align-items-center">
+        <div class="col-sm-4">
+          <input id="title" class="form-control" placeholder="Task title" required>
+        </div>
+        <div class="col-sm-5">
+          <input id="description" class="form-control" placeholder="Description">
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-primary" type="submit">Add Task</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card p-3">
+      <div class="table-responsive">
+        <table class="table table-hover" id="tasksTable">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Title</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Created At</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="tasksBody">
+            <!-- rows filled by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS + fetch polyfill not required for modern browsers -->
+  <script>
+    const apiBase = '/api/tasks';
+
+    async function fetchTasks() {
+      const res = await fetch(apiBase);
+      const tasks = await res.json();
+      const body = document.getElementById('tasksBody');
+      body.innerHTML = tasks.map(t => `
+        <tr>
+          <td>${t.id ?? ''}</td>
+          <td>${escapeHtml(t.title)}</td>
+          <td>${escapeHtml(t.description ?? '')}</td>
+          <td>
+            <span class="badge-status" style="background:${t.status === 'DONE' ? '#e6f4ea' : '#fff3e6'}; border:1px solid #e1e1e1;">
+              ${t.status}
+            </span>
+          </td>
+          <td>${t.createdAt ? t.createdAt.replace('T',' ') : ''}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-1" onclick="editTask(${t.id})">Edit</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteTask(${t.id})">Delete</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+    }
+
+    document.getElementById('taskForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const description = document.getElementById('description').value.trim();
+      if (!title) return alert('Title required');
+      await fetch(apiBase, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title, description, status: 'PENDING' })
+      });
+      document.getElementById('title').value = '';
+      document.getElementById('description').value = '';
+      fetchTasks();
+    });
+
+    async function deleteTask(id) {
+      if (!confirm('Delete task?')) return;
+      await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+      fetchTasks();
+    }
+
+    async function editTask(id) {
+      const res = await fetch(`${apiBase}/${id}`);
+      if (!res.ok) return alert('Failed to fetch task');
+      const task = await res.json();
+      const newTitle = prompt('Edit title', task.title);
+      if (newTitle === null) return; // cancelled
+      const newDesc = prompt('Edit description', task.description || '');
+      const newStatus = confirm('Mark as done?') ? 'DONE' : 'PENDING';
+      await fetch(`${apiBase}/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title: newTitle, description: newDesc, status: newStatus })
+      });
+      fetchTasks();
+    }
+
+    // initial load
+    fetchTasks();
+  </script>
+</body>
+</html>
